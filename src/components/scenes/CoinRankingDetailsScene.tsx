@@ -29,7 +29,7 @@ import { EdgeAsset } from '../../types/types'
 import { CryptoAmount } from '../../util/CryptoAmount'
 import { fetchRates } from '../../util/network'
 import { getBestApyText, isStakingSupported } from '../../util/stakeUtils'
-import { getUkCompliantString } from '../../util/ukComplianceUtils'
+import { getUkCompliantString, hideNonUkCompliantFeature } from '../../util/ukComplianceUtils'
 import { formatLargeNumberString as formatLargeNumber } from '../../util/utils'
 import { IconButton } from '../buttons/IconButton'
 import { AlertCardUi4 } from '../cards/AlertCard'
@@ -118,6 +118,8 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
   const defaultFiat = useSelector(state => getDefaultFiat(state))
   const coingeckoFiat = useSelector(state => getCoingeckoFiat(state))
 
+  const [hideNonUkCompliantFeat = true] = useAsyncValue(async () => await hideNonUkCompliantFeature())
+
   const [fetchedCoinRankingData] = useAsyncValue(async () => {
     if (assetId == null) {
       throw new Error('No currencyCode or coinRankingData provided')
@@ -142,7 +144,7 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
   const currencyCode = coinRankingCurrencyCode?.toUpperCase() ?? ''
 
   /** Loosely Equivalent EdgeAssets for the CoinGecko coin on this scene */
-  const edgeAssets = React.useMemo<EdgeAsset[]>(() => {
+  const matchingEdgeAssets = React.useMemo<EdgeAsset[]>(() => {
     if (coinRankingData == null) return []
 
     const out = []
@@ -164,8 +166,8 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
 
   /** Find all wallets that can hold this asset */
   const matchingWallets = React.useMemo(
-    () => Object.values(currencyWallets).filter(wallet => edgeAssets.some(asset => asset.pluginId === wallet.currencyInfo.pluginId)),
-    [edgeAssets, currencyWallets]
+    () => Object.values(currencyWallets).filter(wallet => matchingEdgeAssets.some(asset => asset.pluginId === wallet.currencyInfo.pluginId)),
+    [matchingEdgeAssets, currencyWallets]
   )
 
   /**
@@ -202,7 +204,7 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
   }, [matchingWallets.length, coinRankingData])
 
   // Get all stake policies we support
-  const [stakePolicies] = useAsyncValue<StakePolicy[]>(async () => {
+  const [allStakePolicies = []] = useAsyncValue<StakePolicy[]>(async () => {
     const out = []
     const pluginIds = Object.keys(currencyConfigMap)
     if (currencyCode === 'FIO') {
@@ -222,24 +224,19 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
     return out
   }, [currencyCode, currencyConfigMap])
 
-  const edgeStakingAssets =
-    stakePolicies == null
-      ? []
-      : edgeAssets.filter(asset => filterStakePolicies(stakePolicies, { pluginId: asset.pluginId, currencyCode: currencyCode.toUpperCase() }).length > 0)
+  const edgeStakingAssets = matchingEdgeAssets.filter(
+    asset =>
+      filterStakePolicies(allStakePolicies, {
+        pluginId: asset.pluginId,
+        currencyCode: currencyCode.toUpperCase()
+      }).length > 0
+  )
 
-  /** Check if all the stake plugins are loaded for this asset type */
-  const isStakingLoading =
-    stakingWallets.length === 0 ||
-    stakingWallets.some(
-      wallet =>
-        walletStakingStateMap[wallet.id] == null ||
-        walletStakingStateMap[wallet.id].isLoading ||
-        walletStakingStateMap[wallet.id].stakePlugins.length === 0 ||
-        Object.keys(walletStakingStateMap[wallet.id].stakePolicies).length === 0
-    ) ||
-    edgeStakingAssets.length === 0 ||
-    stakePolicies == null ||
-    stakePolicies.length === 0
+  /** True if currency supports staking, regardless of if wallets are owned */
+  const isEarnShown = matchingEdgeAssets.some(asset => SPECIAL_CURRENCY_INFO[asset.pluginId]?.isStakingSupported === true)
+
+  /** Check if all the stake plugins/policies are loaded for this asset type */
+  const isStakingLoading = isEarnShown && allStakePolicies.length === 0
 
   const imageUrlObject = React.useMemo(
     () => ({
@@ -387,8 +384,8 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
   }
 
   const handleBuyPress = useHandler(async () => {
-    if (edgeAssets.length === 0) return
-    const forcedWalletResult = await chooseWalletListResult(edgeAssets, matchingWallets, lstrings.fiat_plugin_select_asset_to_purchase)
+    if (matchingEdgeAssets.length === 0) return
+    const forcedWalletResult = await chooseWalletListResult(matchingEdgeAssets, matchingWallets, lstrings.fiat_plugin_select_asset_to_purchase)
     if (forcedWalletResult == null) return
 
     navigation.navigate('edgeTabs', {
@@ -403,8 +400,8 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
   })
 
   const handleSellPress = useHandler(async () => {
-    if (edgeAssets.length === 0) return
-    const forcedWalletResult = await chooseWalletListResult(edgeAssets, matchingWallets, lstrings.fiat_plugin_select_asset_to_sell)
+    if (matchingEdgeAssets.length === 0) return
+    const forcedWalletResult = await chooseWalletListResult(matchingEdgeAssets, matchingWallets, lstrings.fiat_plugin_select_asset_to_sell)
     if (forcedWalletResult == null) return
 
     navigation.navigate('edgeTabs', {
@@ -419,9 +416,9 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
   })
 
   const handleSwapPress = useHandler(async () => {
-    if (edgeAssets.length === 0) return
+    if (matchingEdgeAssets.length === 0) return
 
-    const walletListResult = await chooseWalletListResult(edgeAssets, matchingWallets, lstrings.select_wallet)
+    const walletListResult = await chooseWalletListResult(matchingEdgeAssets, matchingWallets, lstrings.select_wallet)
     if (walletListResult == null) return
 
     const { walletId, tokenId } = walletListResult
@@ -493,20 +490,23 @@ const CoinRankingDetailsSceneComponent = (props: Props) => {
             <EdgeText style={styles.title}>{`${currencyName} (${currencyCode})`}</EdgeText>
           </EdgeAnim>
           <SwipeChart assetId={coinRankingData.assetId} />
-          {edgeAssets.length <= 0 ? null : (
+          {matchingEdgeAssets.length <= 0 ? null : (
             <View style={styles.buttonsContainer}>
-              <IconButton label={lstrings.title_buy} onPress={handleBuyPress}>
-                <Fontello name="buy" size={theme.rem(2)} color={theme.primaryText} />
-              </IconButton>
-              <IconButton label={lstrings.title_sell} onPress={handleSellPress}>
-                <Fontello name="sell" size={theme.rem(2)} color={theme.primaryText} />
-              </IconButton>
-              {countryCode == null || edgeStakingAssets.length === 0 ? null : (
+              {hideNonUkCompliantFeat ? null : (
+                <>
+                  <IconButton label={lstrings.title_buy} onPress={handleBuyPress}>
+                    <Fontello name="buy" size={theme.rem(2)} color={theme.primaryText} />
+                  </IconButton>
+                  <IconButton label={lstrings.title_sell} onPress={handleSellPress}>
+                    <Fontello name="sell" size={theme.rem(2)} color={theme.primaryText} />
+                  </IconButton>
+                </>
+              )}
+              {countryCode == null || !isEarnShown ? null : (
                 <IconButton
                   label={getUkCompliantString(countryCode, 'stake_earn_button_label')}
-                  superscriptLabel={stakingWallets.length <= 0 ? undefined : getBestApyText(stakePolicies)}
+                  superscriptLabel={allStakePolicies == null ? undefined : getBestApyText(filterStakePolicies(allStakePolicies, { currencyCode }))}
                   onPress={handleStakePress}
-                  disabled={isStakingLoading}
                 >
                   {isStakingLoading ? (
                     <ActivityIndicator color={theme.primaryText} style={styles.buttonLoader} />

@@ -2,19 +2,45 @@
 
 ## Unreleased (develop)
 
+- changed: Buy/sell removed for UK
+
+## 4.25.0 (staging)
+
+- fixed: Fix yesterday rate lookup in `exchangeRates`
+- fixed: Crash on `StakeOverviewScene`
+- fixed: Fix race condition between reading and writing account settings
+
+## 4.24.1 (staging)
+
+- added: Add `exchangeRatesMap` to hold current and yesterday rates
+- fixed: FIO wallet Earn button behavior
+
+## 4.24.0 (2025-03-17)
+
 - added: Dynamically populate txId in `SwapDetailsCard` if a "{{TXID}}" tag is found in the `orderUri`
 - added: Integrate `stakeStatusCards` from info server into `StakeOverviewScene`
 - added: "Update Available" modal
 - added: `activePromotions` to save promos upon deeplink activation
+- changed: Sending to an unactivated Algorand recipient now shows a readable error
 - changed: `activePromotions` used to filter available promo cards
 - changed: Enlarged asset icon in `QrCode` and added a white background
 - changed: Modal components synced with edge-login-ui-rn
 - changed: Make buy/sell plugin list navigation params separate
 - changed: Simplify fake scene props implementation to reduce code duplication
+- changed: Transaction date moved to time/confirmations row in `WalletDetailsScene`
+- changed: `HomeScene` tile images
+- changed: FIO handle registrations supported without a configured `fioRegApiToken`
+- changed: Use Ethereum chain icon for bobevm
+- fixed: Spacing in `WalletDetailsScene` transactions and `HomeScene` Markets card
+- fixed: Date spacing in `NotificationCenterCard`
 - fixed: Unstable text input cursor on Android for some instances.
 - fixed: Text used for sharing app split from one message into title and message
+- fixed: `CryptoIcon` not showing secondary/parent icon in some cases
+- fixed: `NotificationView` `ip2faReminder` flickering on iOS and never hiding on Android when pressing X
+- fixed: Markets "Earn" button excessive loading time if many wallets matching the market asset exist on the account
+- fixed: `TransactionListTop` "Earn" button excessive loading time
 
-## 4.23.0 (staging)
+## 4.23.0 (2025-03-01)
 
 - added: Add Abstract ETH Layer 2 support
 - added: Add warning card for fallback currency usage on Coin Ranking scene.
